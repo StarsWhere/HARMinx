@@ -37,17 +37,16 @@ class RateLimiter:
 
 class HttpClient:
     def __init__(self, config: ClientConfig):
-        self.session = requests.Session()
         self.config = config
         self.rate_limiter = RateLimiter(config.rate_limit.requests_per_second)
-        if config.proxies:
-            self.session.proxies.update(config.proxies)
+        self._local = threading.local()
 
     def send(self, request: RequestData, headers: Dict[str, str], body: Optional[str]) -> ResponseSnapshot:
         self.rate_limiter.wait()
         start = time.monotonic()
         try:
-            response = self.session.request(
+            session = self._get_session()
+            response = session.request(
                 method=request.method,
                 url=request.url,
                 headers=headers,
@@ -72,3 +71,12 @@ class HttpClient:
                 error=str(exc),
                 headers={},
             )
+
+    def _get_session(self) -> requests.Session:
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = requests.Session()
+            if self.config.proxies:
+                session.proxies.update(self.config.proxies)
+            self._local.session = session
+        return session

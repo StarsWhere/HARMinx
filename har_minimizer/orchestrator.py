@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple
 
 from .comparator import ResponseComparator
 from .config import Config
@@ -30,10 +31,18 @@ class MinimizationOrchestrator:
         logger.info("共载入 %s 个请求，筛选后剩余 %s 个", len(entries), len(filtered))
         processed: List[ProcessedRequest] = []
         report_entries: List[ReportEntry] = []
-        for entry in filtered:
-            baseline, result = self.minimizer.minimize(entry.request)
-            processed.append(ProcessedRequest(request=entry.request, baseline=baseline, result=result))
-            report_entries.append(self._build_report_entry(entry.request, baseline, result))
+        max_workers = max(1, self.config.client.rate_limit.max_concurrent)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._process_entry, entry): entry
+                for entry in filtered
+            }
+            for future in as_completed(futures):
+                processed_req, report = future.result()
+                processed.append(processed_req)
+                report_entries.append(report)
+        processed.sort(key=lambda item: item.request.index)
+        report_entries.sort(key=lambda item: item.index)
         ReportWriter(self.config.report_path).write(report_entries)
         logger.info("最小化报告已写入 %s", self.config.report_path)
         if self.config.output_har:
@@ -42,6 +51,12 @@ class MinimizationOrchestrator:
             exporter.write(self.config.output_har)
             logger.info("更新后的 HAR 已写入 %s", self.config.output_har)
         return report_entries
+
+    def _process_entry(self, entry) -> Tuple[ProcessedRequest, ReportEntry]:
+        baseline, result = self.minimizer.minimize(entry.request)
+        processed = ProcessedRequest(request=entry.request, baseline=baseline, result=result)
+        report = self._build_report_entry(entry.request, baseline, result)
+        return processed, report
 
     def _build_report_entry(
         self,

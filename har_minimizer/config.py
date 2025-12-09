@@ -136,12 +136,19 @@ def _build_min_config(data: Dict[str, Any]) -> MinimizationConfig:
 
 def _build_client_config(data: Dict[str, Any]) -> ClientConfig:
     rate = data.get("rate_limit", {})
+    def _to_optional_float(value):
+        if value in (None, "", "None", "null", "Null"):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"rate_limit.requests_per_second 需要为数值或 null，当前值：{value!r}")
     return ClientConfig(
         timeout=float(data.get("timeout", 20.0)),
         proxies=data.get("proxies", {}),
         verify_tls=bool(data.get("verify_tls", True)),
         rate_limit=RateLimitConfig(
-            requests_per_second=rate.get("requests_per_second"),
+            requests_per_second=_to_optional_float(rate.get("requests_per_second")),
             max_concurrent=int(rate.get("max_concurrent", 1)),
         ),
     )
