@@ -7,19 +7,23 @@ report_path: ./minimized_report.json
 
 # 请求筛选规则
 filters:
-  # 仅保留这些 HTTP 方法（空列表表示不过滤）
+  # 仅保留这些 HTTP 方法（空列表表示不过滤），示例：["GET", "POST"]
   methods: []
-  # 仅保留指定 Host（空列表表示不过滤）
+  # 仅保留指定 Host（空列表表示不过滤），示例：["api.example.com"]
   hosts: []
-  # 仅保留匹配这些正则的 URL
+  # 仅保留匹配这些正则的 URL，示例：["/api/v1/.*"]
   url_regex: []
+  # 是否剔除完全一致的请求（按方法 + URL + 查询参数 + 请求体 去重，导出的 HAR 也会去重）
+  deduplicate_identical: false
   # 可选：仅处理指定区间内的 entry
   # index_range: [0, 100]
 
 # 执行 scope（可进一步缩小过滤后的请求）
 scope:
   include_urls: []
+  # 示例：["https://api.example.com/api/v1/items?id=123"]
   include_regex: []
+  # 示例：["/api/v1/items\\?.*"]
 
 # 响应对比策略
 comparator:

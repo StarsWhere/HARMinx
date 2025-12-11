@@ -63,6 +63,7 @@ class FilterConfig:
     hosts: List[str] = field(default_factory=list)
     url_regex: List[str] = field(default_factory=list)
     index_range: Optional[Tuple[int, int]] = None
+    deduplicate_identical: bool = False
 
 
 @dataclass

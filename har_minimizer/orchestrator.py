@@ -47,7 +47,11 @@ class MinimizationOrchestrator:
         logger.info("最小化报告已写入 %s", self.config.report_path)
         if self.config.output_har:
             exporter = HarExporter(self.loader.get_raw())
-            exporter.apply(processed, include_metadata=self.config.update_har_metadata)
+            exporter.apply(
+                processed,
+                include_metadata=self.config.update_har_metadata,
+                deduplicate_identical=self.config.filters.deduplicate_identical,
+            )
             exporter.write(self.config.output_har)
             logger.info("更新后的 HAR 已写入 %s", self.config.output_har)
         return report_entries

@@ -4,8 +4,10 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Iterable, List
+from urllib.parse import urlparse, parse_qs
 
 from .models import MinimizationResult, ProcessedRequest, ReportEntry
+from .filtering import build_dedup_key
 
 
 class ReportWriter:
@@ -46,7 +48,12 @@ class HarExporter:
     def __init__(self, raw_har: Dict):
         self.raw = deepcopy(raw_har)
 
-    def apply(self, processed: Iterable[ProcessedRequest], include_metadata: bool = True) -> None:
+    def apply(
+        self,
+        processed: Iterable[ProcessedRequest],
+        include_metadata: bool = True,
+        deduplicate_identical: bool = False,
+    ) -> None:
         entries = self.raw.get("log", {}).get("entries", [])
         for item in processed:
             if not item.result.matched:
@@ -75,9 +82,31 @@ class HarExporter:
                         "matched": item.result.matched,
                     }
                 )
+        if deduplicate_identical:
+            self._deduplicate_entries()
 
     def write(self, path: str) -> None:
         target = Path(path)
         if target.parent and not target.parent.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.raw, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _deduplicate_entries(self) -> None:
+        log = self.raw.get("log", {})
+        entries = log.get("entries", [])
+        seen = set()
+        deduped: List[Dict] = []
+        for entry in entries:
+            request = entry.get("request", {}) or {}
+            url = request.get("url", "") or ""
+            method = request.get("method", "") or ""
+            post_data = request.get("postData", {}) or {}
+            body_text = post_data.get("text")
+            parsed = urlparse(url)
+            query_dict = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(parsed.query).items()}
+            key = build_dedup_key(method=method, url=url, query=query_dict, body_text=body_text)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(entry)
+        log["entries"] = deduped
